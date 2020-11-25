@@ -127,15 +127,15 @@ runcmd(struct cmd *cmd)
       runcmd(bcmd->cmd);
     break;
   }
-  exit(0);
+  exit(0);                               // 子进程runexec结束了
 }
 
 int
-getcmd(char *buf, int nbuf)
+getcmd(char *buf, int nbuf)   // 从标准输入0，输入max为nbuf个字符到buf中，回车换行会断
 {
   fprintf(2, "$ ");
-  memset(buf, 0, nbuf);
-  gets(buf, nbuf);
+  memset(buf, 0, nbuf);     // buf开始的nbuf个char空间均改为0
+  gets(buf, nbuf);         // 从标准输入0, 最多输入nbuf个字符到buf，且\n \r会停止
   if(buf[0] == 0) // EOF
     return -1;
   return 0;
@@ -145,10 +145,10 @@ int
 main(void)
 {
   static char buf[100];
-  int fd;
+  int fd;                          // 文件描述符
 
   // Ensure that three file descriptors are open.
-  while((fd = open("console", O_RDWR)) >= 0){
+  while((fd = open("console", O_RDWR)) >= 0){       // 文件描述符0,1,2都打开
     if(fd >= 3){
       close(fd);
       break;
@@ -157,29 +157,29 @@ main(void)
 
   // Read and run input commands.
   while(getcmd(buf, sizeof(buf)) >= 0){
-    if(buf[0] == 'c' && buf[1] == 'd' && buf[2] == ' '){
+    if(buf[0] == 'c' && buf[1] == 'd' && buf[2] == ' '){            // cd 命令
       // Chdir must be called by the parent, not the child.
       buf[strlen(buf)-1] = 0;  // chop \n
-      if(chdir(buf+3) < 0)
+      if(chdir(buf+3) < 0)                        // system call: chdir(newpath):  return true / false
         fprintf(2, "cannot cd %s\n", buf+3);
       continue;
     }
-    if(fork1() == 0)
+    if(fork1() == 0)                              // if不为cd 命令，子进程：完整一行命令，先解释，再run
       runcmd(parsecmd(buf));
-    wait(0);
-  }
+    wait(0);                           // 等子进程结束
+  }                         // 直到输入为空？（maybe?)结束了
   exit(0);
 }
 
 void
-panic(char *s)
+panic(char *s)                // 将 s : 标准错误输出
 {
   fprintf(2, "%s\n", s);
   exit(-1);
 }
 
 int
-fork1(void)
+fork1(void)                // 返回pid，比fork加个 fork失败
 {
   int pid;
 
@@ -198,7 +198,7 @@ execcmd(void)
   struct execcmd *cmd;
 
   cmd = malloc(sizeof(*cmd));
-  memset(cmd, 0, sizeof(*cmd));
+  memset(cmd, 0, sizeof(*cmd));      // 动态申请的内存空间cmd：内容清0
   cmd->type = EXEC;
   return (struct cmd*)cmd;
 }
@@ -263,15 +263,15 @@ char whitespace[] = " \t\r\n\v";
 char symbols[] = "<|>&;()";
 
 int
-gettoken(char **ps, char *es, char **q, char **eq)
+gettoken(char **ps, char *es, char **q, char **eq)     // es是末尾位置  
 {
   char *s;
   int ret;
 
   s = *ps;
-  while(s < es && strchr(whitespace, *s))
+  while(s < es && strchr(whitespace, *s))     // 返回 字符串whitespace中 首次出现字符 *s的位置, null / *ptr
     s++;
-  if(q)
+  if(q)                     // q应为 已申请内存的未用内存指针
     *q = s;
   ret = *s;
   switch(*s){
@@ -287,18 +287,18 @@ gettoken(char **ps, char *es, char **q, char **eq)
     break;
   case '>':
     s++;
-    if(*s == '>'){
+    if(*s == '>'){              // ">>"是？
       ret = '+';
       s++;
     }
     break;
   default:
     ret = 'a';
-    while(s < es && !strchr(whitespace, *s) && !strchr(symbols, *s))
+    while(s < es && !strchr(whitespace, *s) && !strchr(symbols, *s))        // 普通字符
       s++;
     break;
   }
-  if(eq)
+  if(eq)                    // 
     *eq = s;
 
   while(s < es && strchr(whitespace, *s))
@@ -308,15 +308,15 @@ gettoken(char **ps, char *es, char **q, char **eq)
 }
 
 int
-peek(char **ps, char *es, char *toks)
+peek(char **ps, char *es, char *toks)         // es是末尾位置指针, ps是&buf, toks是？？（去掉space，ps第一位是否在toks中？）
 {
   char *s;
 
   s = *ps;
-  while(s < es && strchr(whitespace, *s))
+  while(s < es && strchr(whitespace, *s))              // 妙啊！ps值不变,  *ps值改变
     s++;
-  *ps = s;
-  return *s && strchr(toks, *s);
+  *ps = s;                                           // 去掉ps最初的whitespace
+  return *s && strchr(toks, *s);                 // 条件与??? char && null/char*
 }
 
 struct cmd *parseline(char**, char*);
@@ -325,13 +325,13 @@ struct cmd *parseexec(char**, char*);
 struct cmd *nulterminate(struct cmd*);
 
 struct cmd*
-parsecmd(char *s)
+parsecmd(char *s)                   // main把完整一行命令 buf传入
 {
   char *es;
   struct cmd *cmd;
 
-  es = s + strlen(s);
-  cmd = parseline(&s, es);
+  es = s + strlen(s);               // es指向原'\0'的位置，已被main修改为0
+  cmd = parseline(&s, es);         // 为什么传入 &s ? 相当于 s的值即为buf地址，相当于传入buf地址的地址
   peek(&s, es, "");
   if(s != es){
     fprintf(2, "leftovers: %s\n", s);
@@ -342,12 +342,12 @@ parsecmd(char *s)
 }
 
 struct cmd*
-parseline(char **ps, char *es)
+parseline(char **ps, char *es)        // &buf, es
 {
   struct cmd *cmd;
 
-  cmd = parsepipe(ps, es);
-  while(peek(ps, es, "&")){
+  cmd = parsepipe(ps, es);           // 又传入&buf, es
+  while(peek(ps, es, "&")){                                 /// 有&, 建立backcmd
     gettoken(ps, es, 0, 0);
     cmd = backcmd(cmd);
   }
@@ -359,12 +359,12 @@ parseline(char **ps, char *es)
 }
 
 struct cmd*
-parsepipe(char **ps, char *es)
+parsepipe(char **ps, char *es)        // &buf, es
 {
   struct cmd *cmd;
 
-  cmd = parseexec(ps, es);
-  if(peek(ps, es, "|")){
+  cmd = parseexec(ps, es);        // 又传入&buf, es
+  if(peek(ps, es, "|")){                 // 如果接下来是 '|', 跳过'|',
     gettoken(ps, es, 0, 0);
     cmd = pipecmd(cmd, parsepipe(ps, es));
   }
@@ -401,9 +401,9 @@ parseblock(char **ps, char *es)
 {
   struct cmd *cmd;
 
-  if(!peek(ps, es, "("))
+  if(!peek(ps, es, "("))              // ???为什么，因为条件真，才进入的这个函数吧？？？？？？
     panic("parseblock");
-  gettoken(ps, es, 0, 0);
+  gettoken(ps, es, 0, 0);            // 跳过这个特殊符号及后面whitespace
   cmd = parseline(ps, es);
   if(!peek(ps, es, ")"))
     panic("syntax - missing )");
@@ -413,14 +413,14 @@ parseblock(char **ps, char *es)
 }
 
 struct cmd*
-parseexec(char **ps, char *es)
+parseexec(char **ps, char *es)        // &buf, es
 {
   char *q, *eq;
   int tok, argc;
   struct execcmd *cmd;
   struct cmd *ret;
 
-  if(peek(ps, es, "("))
+  if(peek(ps, es, "("))            // 判断去掉whitespace后，有没有"("?
     return parseblock(ps, es);
 
   ret = execcmd();
